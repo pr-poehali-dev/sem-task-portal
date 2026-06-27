@@ -120,4 +120,4 @@ export async function updateUser(payload: { id: number; rank?: string; password?
   return data;
 }
 
-export const RANKS = ['Программист', 'Режиссёр', 'Дизайнер', 'Монтажёр', 'Сценарист', 'Маркетолог'];
+export const RANKS = ['Программист', 'Режиссёр', 'Дизайнер', 'Монтажёр', 'Сценарист', 'Маркетолог', 'Тестировщик'];
