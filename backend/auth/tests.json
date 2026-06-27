@@ -1,0 +1,27 @@
+{
+  "tests": [
+    {
+      "name": "Login owner DezeYT",
+      "method": "POST",
+      "path": "/",
+      "body": {"username": "DezeYT", "password": "ermolovo4"},
+      "expectedStatus": 200,
+      "expectedBody": {"token": "string"},
+      "bodyMatcher": "partial"
+    },
+    {
+      "name": "Wrong password",
+      "method": "POST",
+      "path": "/",
+      "body": {"username": "DezeYT", "password": "wrong"},
+      "expectedStatus": 401
+    },
+    {
+      "name": "Empty credentials",
+      "method": "POST",
+      "path": "/",
+      "body": {"username": "", "password": ""},
+      "expectedStatus": 400
+    }
+  ]
+}
