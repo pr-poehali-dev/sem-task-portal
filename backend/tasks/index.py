@@ -65,7 +65,9 @@ def handler(event: dict, context) -> dict:
                 f"SELECT t.id, t.title, t.description, t.target_rank, t.assigned_user_id, "
                 f"t.status, t.created_at, u.username AS assigned_username "
                 f"FROM tasks t LEFT JOIN users u ON t.assigned_user_id = u.id "
-                f"WHERE t.target_rank = '{sr}' AND (t.assigned_user_id IS NULL OR t.assigned_user_id = {me['id']}) "
+                f"WHERE t.target_rank = '{sr}' "
+                f"AND t.status != 'cancelled' "
+                f"AND (t.assigned_user_id IS NULL OR t.assigned_user_id = {me['id']}) "
                 f"ORDER BY t.created_at DESC"
             )
         rows = cur.fetchall()
@@ -146,6 +148,25 @@ def handler(event: dict, context) -> dict:
 
         if action == 'read_notifications':
             cur.execute(f"UPDATE notifications SET is_read = TRUE WHERE user_id = {me['id']}")
+            conn.commit()
+            cur.close()
+            conn.close()
+            return {'statusCode': 200, 'headers': cors_headers(),
+                    'body': json.dumps({'ok': True})}
+
+        if action == 'cancel_task':
+            if not me['is_owner']:
+                cur.close()
+                conn.close()
+                return {'statusCode': 403, 'headers': cors_headers(),
+                        'body': json.dumps({'error': 'Только владелец может отменять заказы'})}
+            task_id = body.get('task_id')
+            if not task_id:
+                cur.close()
+                conn.close()
+                return {'statusCode': 400, 'headers': cors_headers(),
+                        'body': json.dumps({'error': 'Не указан заказ'})}
+            cur.execute(f"UPDATE tasks SET status = 'cancelled' WHERE id = {int(task_id)}")
             conn.commit()
             cur.close()
             conn.close()

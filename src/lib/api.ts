@@ -1,6 +1,7 @@
 const AUTH_URL = 'https://functions.poehali.dev/bd0ab522-7ccd-41c8-bcf0-46e7c180fe18';
 const USERS_URL = 'https://functions.poehali.dev/1317dc42-7cbb-4019-ae9d-718ef6b95713';
 const TASKS_URL = 'https://functions.poehali.dev/e9fb56ee-c122-46ad-a62b-5fecae82d558';
+const CHAT_URL = 'https://functions.poehali.dev/a1a049e0-acf2-41d1-bc5a-108d1a59071c';
 
 export interface User {
   id: number;
@@ -117,6 +118,54 @@ export async function updateUser(payload: { id: number; rank?: string; password?
   });
   const data = await res.json();
   if (!res.ok) throw new Error(data.error || 'Ошибка обновления');
+  return data;
+}
+
+export async function cancelTask(task_id: number) {
+  const res = await fetch(TASKS_URL, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', 'X-Auth-Token': getToken() },
+    body: JSON.stringify({ action: 'cancel_task', task_id }),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || 'Ошибка отмены');
+}
+
+export async function deleteUser(id: number) {
+  const res = await fetch(USERS_URL, {
+    method: 'DELETE',
+    headers: { 'Content-Type': 'application/json', 'X-Auth-Token': getToken() },
+    body: JSON.stringify({ id }),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || 'Ошибка удаления');
+}
+
+export interface ChatMessage {
+  id: number;
+  user_id: number;
+  username: string;
+  message: string;
+  created_at: string;
+}
+
+export async function getChatMessages() {
+  const res = await fetch(CHAT_URL, {
+    headers: { 'X-Auth-Token': getToken() },
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || 'Ошибка загрузки чата');
+  return data as { messages: ChatMessage[]; me_id: number };
+}
+
+export async function sendChatMessage(message: string) {
+  const res = await fetch(CHAT_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-Auth-Token': getToken() },
+    body: JSON.stringify({ message }),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || 'Ошибка отправки');
   return data;
 }
 

@@ -138,6 +138,38 @@ def handler(event: dict, context) -> dict:
         return {'statusCode': 200, 'headers': cors_headers(),
                 'body': json.dumps({'ok': True})}
 
+    if method == 'DELETE':
+        body = json.loads(event.get('body') or '{}')
+        user_id = body.get('id')
+        if not user_id:
+            cur.close()
+            conn.close()
+            return {'statusCode': 400, 'headers': cors_headers(),
+                    'body': json.dumps({'error': 'Не указан пользователь'})}
+        cur.execute(f"SELECT is_owner FROM users WHERE id = {int(user_id)}")
+        target = cur.fetchone()
+        if not target:
+            cur.close()
+            conn.close()
+            return {'statusCode': 404, 'headers': cors_headers(),
+                    'body': json.dumps({'error': 'Пользователь не найден'})}
+        if target['is_owner']:
+            cur.close()
+            conn.close()
+            return {'statusCode': 403, 'headers': cors_headers(),
+                    'body': json.dumps({'error': 'Нельзя удалить владельца'})}
+        cur.execute(f"UPDATE notifications SET user_id = NULL WHERE user_id = {int(user_id)}")
+        cur.execute(f"UPDATE tasks SET assigned_user_id = NULL WHERE assigned_user_id = {int(user_id)}")
+        cur.execute(f"UPDATE tasks SET created_by = NULL WHERE created_by = {int(user_id)}")
+        cur.execute(f"UPDATE chat_messages SET user_id = NULL WHERE user_id = {int(user_id)}")
+        cur.execute(f"UPDATE users SET token = NULL WHERE id = {int(user_id)}")
+        cur.execute(f"UPDATE users SET password = 'DELETED', username = 'deleted_{int(user_id)}', token = NULL WHERE id = {int(user_id)} AND is_owner = FALSE")
+        conn.commit()
+        cur.close()
+        conn.close()
+        return {'statusCode': 200, 'headers': cors_headers(),
+                'body': json.dumps({'ok': True})}
+
     cur.close()
     conn.close()
     return {'statusCode': 405, 'headers': cors_headers(),

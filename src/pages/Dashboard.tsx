@@ -12,9 +12,12 @@ import ProfileSection from '@/components/dashboard/ProfileSection';
 import StatsSection from '@/components/dashboard/StatsSection';
 import TeamSection from '@/components/dashboard/TeamSection';
 import AdminSection from '@/components/dashboard/AdminSection';
+import ChatSection from '@/components/dashboard/ChatSection';
 import NotificationsPanel from '@/components/dashboard/NotificationsPanel';
 
-type Section = 'home' | 'tasks' | 'team' | 'stats' | 'profile' | 'admin';
+type Section = 'home' | 'tasks' | 'chat' | 'team' | 'stats' | 'profile' | 'admin';
+
+const SEM_WEBSITE = 'https://sem-cool-website--preview.poehali.dev/';
 
 const Dashboard = () => {
   const navigate = useNavigate();
@@ -79,16 +82,26 @@ const Dashboard = () => {
 
   const unread = notifications.filter((n) => !n.is_read).length;
 
-  const navItems: { key: Section; label: string; icon: string }[] = [
+  const navItems: { key: Section | 'website'; label: string; icon: string; external?: string }[] = [
     { key: 'home', label: 'Главная', icon: 'Home' },
     { key: 'tasks', label: 'Задачи', icon: 'ListTodo' },
+    { key: 'chat', label: 'Чат', icon: 'MessageSquare' },
     { key: 'stats', label: 'Статистика', icon: 'BarChart3' },
     { key: 'profile', label: 'Профиль', icon: 'User' },
+    { key: 'website', label: 'Наш сайт', icon: 'Globe', external: SEM_WEBSITE },
   ];
   if (me.is_owner) {
-    navItems.splice(2, 0, { key: 'team', label: 'Команда', icon: 'Users' });
+    navItems.splice(3, 0, { key: 'team', label: 'Команда', icon: 'Users' });
     navItems.push({ key: 'admin', label: 'Управление', icon: 'Settings' });
   }
+
+  const handleNav = (item: typeof navItems[0]) => {
+    if (item.external) {
+      window.open(item.external, '_blank', 'noopener,noreferrer');
+    } else {
+      setSection(item.key as Section);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-mesh">
@@ -131,22 +144,28 @@ const Dashboard = () => {
           {navItems.map((item) => (
             <button
               key={item.key}
-              onClick={() => setSection(item.key)}
+              onClick={() => handleNav(item)}
               className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all ${
-                section === item.key
+                !item.external && section === item.key
                   ? 'bg-gradient-to-r from-primary to-accent text-white font-semibold'
+                  : item.external
+                  ? 'hover:bg-secondary/60 text-muted-foreground hover:text-accent'
                   : 'hover:bg-secondary/60 text-muted-foreground'
               }`}
             >
               <Icon name={item.icon} size={20} />
-              {item.label}
+              <span className="flex-1 text-left">{item.label}</span>
+              {item.external && <Icon name="ExternalLink" size={14} className="opacity-60" />}
             </button>
           ))}
         </aside>
 
         <main className="flex-1 min-w-0 animate-fade-in">
           {section === 'home' && <HomeSection me={me} tasks={tasks} onGo={setSection} />}
-          {section === 'tasks' && <TasksSection me={me} tasks={tasks} onStatus={handleStatus} />}
+          {section === 'tasks' && (
+            <TasksSection me={me} tasks={tasks} onStatus={handleStatus} onRefresh={load} />
+          )}
+          {section === 'chat' && <ChatSection />}
           {section === 'stats' && <StatsSection tasks={tasks} />}
           {section === 'team' && me.is_owner && <TeamSection />}
           {section === 'profile' && <ProfileSection me={me} tasks={tasks} />}
@@ -158,9 +177,9 @@ const Dashboard = () => {
         {navItems.slice(0, 5).map((item) => (
           <button
             key={item.key}
-            onClick={() => setSection(item.key)}
+            onClick={() => handleNav(item)}
             className={`flex flex-col items-center gap-0.5 px-2 py-1 rounded-lg text-xs ${
-              section === item.key ? 'text-primary' : 'text-muted-foreground'
+              !item.external && section === item.key ? 'text-primary' : 'text-muted-foreground'
             }`}
           >
             <Icon name={item.icon} size={20} />

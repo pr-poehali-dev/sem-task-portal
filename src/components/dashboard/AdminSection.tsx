@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import {
-  getUsers, createUser, updateUser, createTask, RANKS, User,
+  getUsers, createUser, updateUser, deleteUser, createTask, RANKS, User,
 } from '@/lib/api';
 import Icon from '@/components/ui/icon';
 import { Button } from '@/components/ui/button';
@@ -77,6 +77,17 @@ const AdminSection = ({ onChanged }: Props) => {
     try {
       await updateUser({ id, rank });
       toast.success('Ранг обновлён');
+      loadUsers();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Ошибка');
+    }
+  };
+
+  const handleDeleteUser = async (id: number, username: string) => {
+    if (!confirm(`Удалить аккаунт ${username}? Это действие нельзя отменить.`)) return;
+    try {
+      await deleteUser(id);
+      toast.success(`Аккаунт ${username} удалён`);
       loadUsers();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Ошибка');
@@ -190,12 +201,21 @@ const AdminSection = ({ onChanged }: Props) => {
                   {u.is_owner ? (
                     <span className="text-sm text-muted-foreground px-3">Владелец</span>
                   ) : (
-                    <Select value={u.rank} onValueChange={(v) => changeRank(u.id, v)}>
-                      <SelectTrigger className="w-40 bg-secondary/60"><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        {Array.from(new Set([...RANKS, u.rank])).map((r) => <SelectItem key={r} value={r}>{r}</SelectItem>)}
-                      </SelectContent>
-                    </Select>
+                    <div className="flex items-center gap-2">
+                      <Select value={u.rank} onValueChange={(v) => changeRank(u.id, v)}>
+                        <SelectTrigger className="w-36 bg-secondary/60"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          {Array.from(new Set([...RANKS, u.rank])).map((r) => <SelectItem key={r} value={r}>{r}</SelectItem>)}
+                        </SelectContent>
+                      </Select>
+                      <button
+                        onClick={() => handleDeleteUser(u.id, u.username)}
+                        className="w-8 h-8 rounded-lg bg-destructive/20 hover:bg-destructive/60 text-destructive flex items-center justify-center transition-colors shrink-0"
+                        title="Удалить аккаунт"
+                      >
+                        <Icon name="Trash2" size={15} />
+                      </button>
+                    </div>
                   )}
                 </div>
               ))}
