@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import {
-  getUsers, createUser, updateUser, deleteUser, createTask, RANKS, User,
+  getUsers, createUser, updateUser, deleteUser, toggleUserChat, createTask, RANKS, User,
 } from '@/lib/api';
 import Icon from '@/components/ui/icon';
 import { Button } from '@/components/ui/button';
@@ -88,6 +88,16 @@ const AdminSection = ({ onChanged }: Props) => {
     try {
       await deleteUser(id);
       toast.success(`Аккаунт ${username} удалён`);
+      loadUsers();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Ошибка');
+    }
+  };
+
+  const handleToggleChat = async (id: number, disabled: boolean) => {
+    try {
+      await toggleUserChat(id, disabled);
+      toast.success(disabled ? 'Чат заблокирован' : 'Чат разблокирован');
       loadUsers();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Ошибка');
@@ -208,6 +218,17 @@ const AdminSection = ({ onChanged }: Props) => {
                           {Array.from(new Set([...RANKS, u.rank])).map((r) => <SelectItem key={r} value={r}>{r}</SelectItem>)}
                         </SelectContent>
                       </Select>
+                      <button
+                        onClick={() => handleToggleChat(u.id, !u.chat_disabled)}
+                        className={`w-8 h-8 rounded-lg flex items-center justify-center transition-colors shrink-0 ${
+                          u.chat_disabled
+                            ? 'bg-destructive/30 text-destructive hover:bg-destructive/50'
+                            : 'bg-secondary/60 text-muted-foreground hover:bg-accent/20 hover:text-accent'
+                        }`}
+                        title={u.chat_disabled ? 'Разблокировать чат' : 'Заблокировать чат'}
+                      >
+                        <Icon name={u.chat_disabled ? 'MessageSquareOff' : 'MessageSquare'} size={15} />
+                      </button>
                       <button
                         onClick={() => handleDeleteUser(u.id, u.username)}
                         className="w-8 h-8 rounded-lg bg-destructive/20 hover:bg-destructive/60 text-destructive flex items-center justify-center transition-colors shrink-0"

@@ -22,16 +22,15 @@ def get_user_by_token(cur, token):
     if not token:
         return None
     safe = token.replace("'", "''")
-    cur.execute(f"SELECT id, username, rank, is_owner FROM users WHERE token = '{safe}'")
+    cur.execute(f"SELECT id, username, rank, is_owner FROM users WHERE token = '{safe}' AND is_hidden = FALSE")
     return cur.fetchone()
 
 
 def handler(event: dict, context) -> dict:
     '''
     Задачи и уведомления портала Sem.
-    Задачи создаёт только владелец DezeYT. Специалисты видят задачи своего ранга.
-    GET — задачи и уведомления пользователя, POST — создать задачу (владелец),
-    PUT — изменить статус задачи или прочитать уведомления.
+    PUT action=done_with_link — завершить со ссылкой на Яндекс Диск.
+    PUT action=accept_task — владелец принимает и обнуляет задачу.
     '''
     method = event.get('httpMethod', 'GET')
 
@@ -55,7 +54,7 @@ def handler(event: dict, context) -> dict:
         if me['is_owner']:
             cur.execute(
                 "SELECT t.id, t.title, t.description, t.target_rank, t.assigned_user_id, "
-                "t.status, t.created_at, u.username AS assigned_username "
+                "t.status, t.is_accepted, t.completion_link, t.created_at, u.username AS assigned_username "
                 "FROM tasks t LEFT JOIN users u ON t.assigned_user_id = u.id "
                 "ORDER BY t.created_at DESC"
             )
@@ -63,10 +62,11 @@ def handler(event: dict, context) -> dict:
             sr = me['rank'].replace("'", "''")
             cur.execute(
                 f"SELECT t.id, t.title, t.description, t.target_rank, t.assigned_user_id, "
-                f"t.status, t.created_at, u.username AS assigned_username "
+                f"t.status, t.is_accepted, t.completion_link, t.created_at, u.username AS assigned_username "
                 f"FROM tasks t LEFT JOIN users u ON t.assigned_user_id = u.id "
                 f"WHERE t.target_rank = '{sr}' "
                 f"AND t.status != 'cancelled' "
+                f"AND t.is_accepted = FALSE "
                 f"AND (t.assigned_user_id IS NULL OR t.assigned_user_id = {me['id']}) "
                 f"ORDER BY t.created_at DESC"
             )
@@ -75,7 +75,9 @@ def handler(event: dict, context) -> dict:
             'id': r['id'], 'title': r['title'], 'description': r['description'],
             'target_rank': r['target_rank'], 'assigned_user_id': r['assigned_user_id'],
             'assigned_username': r['assigned_username'],
-            'status': r['status'], 'created_at': r['created_at'].isoformat()
+            'status': r['status'], 'is_accepted': r['is_accepted'],
+            'completion_link': r['completion_link'],
+            'created_at': r['created_at'].isoformat()
         } for r in rows]
 
         cur.execute(
@@ -134,7 +136,7 @@ def handler(event: dict, context) -> dict:
         else:
             cur.execute(
                 f"INSERT INTO notifications (user_id, task_id, message) "
-                f"SELECT id, {task_id}, '{msg}' FROM users WHERE rank = '{srank}' AND is_owner = FALSE"
+                f"SELECT id, {task_id}, '{msg}' FROM users WHERE rank = '{srank}' AND is_owner = FALSE AND is_hidden = FALSE"
             )
         conn.commit()
         cur.close()
@@ -167,6 +169,56 @@ def handler(event: dict, context) -> dict:
                 return {'statusCode': 400, 'headers': cors_headers(),
                         'body': json.dumps({'error': 'Не указан заказ'})}
             cur.execute(f"UPDATE tasks SET status = 'cancelled' WHERE id = {int(task_id)}")
+            conn.commit()
+            cur.close()
+            conn.close()
+            return {'statusCode': 200, 'headers': cors_headers(),
+                    'body': json.dumps({'ok': True})}
+
+        if action == 'done_with_link':
+            task_id = body.get('task_id')
+            link = (body.get('link') or '').strip()
+            if not task_id:
+                cur.close()
+                conn.close()
+                return {'statusCode': 400, 'headers': cors_headers(),
+                        'body': json.dumps({'error': 'Не указан заказ'})}
+            sl = link.replace("'", "''")
+            srank = me['rank'].replace("'", "''")
+            cur.execute(
+                f"UPDATE tasks SET status = 'done', assigned_user_id = {me['id']}, "
+                f"completion_link = '{sl}' "
+                f"WHERE id = {int(task_id)} AND target_rank = '{srank}' AND is_accepted = FALSE"
+            )
+            owner_msg = f"Заказ завершён: ".replace("'", "''")
+            cur.execute(f"SELECT title FROM tasks WHERE id = {int(task_id)}")
+            task_row = cur.fetchone()
+            if task_row:
+                title_s = task_row['title'].replace("'", "''")
+                owner_msg = f"Заказ завершён: {task_row['title']}".replace("'", "''")
+            cur.execute(
+                f"INSERT INTO notifications (user_id, task_id, message) "
+                f"SELECT id, {int(task_id)}, '{owner_msg}' FROM users WHERE is_owner = TRUE"
+            )
+            conn.commit()
+            cur.close()
+            conn.close()
+            return {'statusCode': 200, 'headers': cors_headers(),
+                    'body': json.dumps({'ok': True})}
+
+        if action == 'accept_task':
+            if not me['is_owner']:
+                cur.close()
+                conn.close()
+                return {'statusCode': 403, 'headers': cors_headers(),
+                        'body': json.dumps({'error': 'Только владелец принимает заказы'})}
+            task_id = body.get('task_id')
+            if not task_id:
+                cur.close()
+                conn.close()
+                return {'statusCode': 400, 'headers': cors_headers(),
+                        'body': json.dumps({'error': 'Не указан заказ'})}
+            cur.execute(f"UPDATE tasks SET is_accepted = TRUE, status = 'done' WHERE id = {int(task_id)} AND status = 'done'")
             conn.commit()
             cur.close()
             conn.close()

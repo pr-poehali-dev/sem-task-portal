@@ -13,9 +13,10 @@ import StatsSection from '@/components/dashboard/StatsSection';
 import TeamSection from '@/components/dashboard/TeamSection';
 import AdminSection from '@/components/dashboard/AdminSection';
 import ChatSection from '@/components/dashboard/ChatSection';
+import PrivateChatSection from '@/components/dashboard/PrivateChatSection';
 import NotificationsPanel from '@/components/dashboard/NotificationsPanel';
 
-type Section = 'home' | 'tasks' | 'chat' | 'team' | 'stats' | 'profile' | 'admin';
+type Section = 'home' | 'tasks' | 'chat' | 'private' | 'team' | 'stats' | 'profile' | 'admin';
 
 const SEM_WEBSITE = 'https://sem-cool-website--preview.poehali.dev/';
 
@@ -85,13 +86,14 @@ const Dashboard = () => {
   const navItems: { key: Section | 'website'; label: string; icon: string; external?: string }[] = [
     { key: 'home', label: 'Главная', icon: 'Home' },
     { key: 'tasks', label: 'Задачи', icon: 'ListTodo' },
-    { key: 'chat', label: 'Чат', icon: 'MessageSquare' },
+    { key: 'chat', label: 'Общий чат', icon: 'MessageSquare' },
+    { key: 'private', label: 'Личные сообщения', icon: 'MessageCircle' },
     { key: 'stats', label: 'Статистика', icon: 'BarChart3' },
     { key: 'profile', label: 'Профиль', icon: 'User' },
     { key: 'website', label: 'Наш сайт', icon: 'Globe', external: SEM_WEBSITE },
   ];
   if (me.is_owner) {
-    navItems.splice(3, 0, { key: 'team', label: 'Команда', icon: 'Users' });
+    navItems.splice(4, 0, { key: 'team', label: 'Команда', icon: 'Users' });
     navItems.push({ key: 'admin', label: 'Управление', icon: 'Settings' });
   }
 
@@ -166,6 +168,7 @@ const Dashboard = () => {
             <TasksSection me={me} tasks={tasks} onStatus={handleStatus} onRefresh={load} />
           )}
           {section === 'chat' && <ChatSection />}
+          {section === 'private' && <PrivateChatSection me={me} />}
           {section === 'stats' && <StatsSection tasks={tasks} />}
           {section === 'team' && me.is_owner && <TeamSection />}
           {section === 'profile' && <ProfileSection me={me} tasks={tasks} />}
@@ -173,13 +176,20 @@ const Dashboard = () => {
         </main>
       </div>
 
+      {/* Мобильная навигация */}
       <nav className="md:hidden fixed bottom-0 inset-x-0 glass border-t border-border/40 flex justify-around py-2 z-40">
-        {navItems.slice(0, 5).map((item) => (
+        {[
+          { key: 'home', icon: 'Home', label: 'Главная' },
+          { key: 'tasks', icon: 'ListTodo', label: 'Задачи' },
+          { key: 'chat', icon: 'MessageSquare', label: 'Чат' },
+          { key: 'private', icon: 'MessageCircle', label: 'Личные' },
+          { key: 'profile', icon: 'User', label: 'Профиль' },
+        ].map((item) => (
           <button
             key={item.key}
-            onClick={() => handleNav(item)}
+            onClick={() => setSection(item.key as Section)}
             className={`flex flex-col items-center gap-0.5 px-2 py-1 rounded-lg text-xs ${
-              !item.external && section === item.key ? 'text-primary' : 'text-muted-foreground'
+              section === item.key ? 'text-primary' : 'text-muted-foreground'
             }`}
           >
             <Icon name={item.icon} size={20} />

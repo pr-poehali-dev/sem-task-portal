@@ -1,0 +1,1 @@
+UPDATE users SET is_hidden = TRUE WHERE id = 2;

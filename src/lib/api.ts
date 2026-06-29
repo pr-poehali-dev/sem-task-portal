@@ -2,12 +2,14 @@ const AUTH_URL = 'https://functions.poehali.dev/bd0ab522-7ccd-41c8-bcf0-46e7c180
 const USERS_URL = 'https://functions.poehali.dev/1317dc42-7cbb-4019-ae9d-718ef6b95713';
 const TASKS_URL = 'https://functions.poehali.dev/e9fb56ee-c122-46ad-a62b-5fecae82d558';
 const CHAT_URL = 'https://functions.poehali.dev/a1a049e0-acf2-41d1-bc5a-108d1a59071c';
+const PRIVATE_CHAT_URL = 'https://functions.poehali.dev/dba9857b-992e-4e1d-863c-f1f101d48484';
 
 export interface User {
   id: number;
   username: string;
   rank: string;
   is_owner: boolean;
+  chat_disabled?: boolean;
   created_at?: string;
 }
 
@@ -18,8 +20,27 @@ export interface Task {
   target_rank: string;
   assigned_user_id: number | null;
   assigned_username: string | null;
-  status: 'new' | 'in_progress' | 'done';
+  status: 'new' | 'in_progress' | 'done' | 'cancelled';
+  is_accepted: boolean;
+  completion_link: string | null;
   created_at: string;
+}
+
+export interface PrivateMessage {
+  id: number;
+  from_user_id: number;
+  from_username: string;
+  message: string;
+  is_read: boolean;
+  created_at: string;
+}
+
+export interface Dialog {
+  partner_id: number;
+  partner_username: string;
+  last_message: string;
+  created_at: string;
+  has_unread: boolean;
 }
 
 export interface Notification {
@@ -163,6 +184,65 @@ export async function sendChatMessage(message: string) {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'X-Auth-Token': getToken() },
     body: JSON.stringify({ message }),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || 'Ошибка отправки');
+  return data;
+}
+
+export async function doneWithLink(task_id: number, link: string) {
+  const res = await fetch(TASKS_URL, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', 'X-Auth-Token': getToken() },
+    body: JSON.stringify({ action: 'done_with_link', task_id, link }),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || 'Ошибка');
+}
+
+export async function acceptTask(task_id: number) {
+  const res = await fetch(TASKS_URL, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', 'X-Auth-Token': getToken() },
+    body: JSON.stringify({ action: 'accept_task', task_id }),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || 'Ошибка принятия');
+}
+
+export async function toggleUserChat(id: number | null, chat_disabled: boolean) {
+  const res = await fetch(USERS_URL, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', 'X-Auth-Token': getToken() },
+    body: JSON.stringify({ action: 'toggle_chat', id, chat_disabled }),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || 'Ошибка');
+}
+
+export async function getPrivateMessages(withUserId: number) {
+  const res = await fetch(`${PRIVATE_CHAT_URL}?with=${withUserId}`, {
+    headers: { 'X-Auth-Token': getToken() },
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || 'Ошибка');
+  return data as { messages: PrivateMessage[]; me_id: number };
+}
+
+export async function getDialogs() {
+  const res = await fetch(PRIVATE_CHAT_URL, {
+    headers: { 'X-Auth-Token': getToken() },
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || 'Ошибка');
+  return data as { dialogs: Dialog[] };
+}
+
+export async function sendPrivateMessage(to_user_id: number, message: string) {
+  const res = await fetch(PRIVATE_CHAT_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-Auth-Token': getToken() },
+    body: JSON.stringify({ to_user_id, message }),
   });
   const data = await res.json();
   if (!res.ok) throw new Error(data.error || 'Ошибка отправки');

@@ -1,6 +1,5 @@
 import json
 import os
-import secrets
 import psycopg2
 from psycopg2.extras import RealDictCursor
 
@@ -23,15 +22,15 @@ def get_user_by_token(cur, token):
     if not token:
         return None
     safe = token.replace("'", "''")
-    cur.execute(f"SELECT id, username, rank, is_owner FROM users WHERE token = '{safe}'")
+    cur.execute(f"SELECT id, username, rank, is_owner, chat_disabled FROM users WHERE token = '{safe}' AND is_hidden = FALSE")
     return cur.fetchone()
 
 
 def handler(event: dict, context) -> dict:
     '''
     Управление пользователями портала Sem.
-    Только владелец DezeYT может создавать аккаунты и менять ранги.
-    GET — список пользователей, POST — создать, PUT — изменить ранг.
+    Только владелец DezeYT может создавать/скрывать аккаунты, менять ранги и блокировать чат.
+    GET — список, POST — создать, PUT — изменить ранг/пароль/чат, DELETE — скрыть аккаунт.
     '''
     method = event.get('httpMethod', 'GET')
 
@@ -58,11 +57,15 @@ def handler(event: dict, context) -> dict:
                 'body': json.dumps({'error': 'Доступ только для владельца'})}
 
     if method == 'GET':
-        cur.execute("SELECT id, username, rank, is_owner, created_at FROM users ORDER BY id")
+        cur.execute(
+            "SELECT id, username, rank, is_owner, chat_disabled, created_at "
+            "FROM users WHERE is_hidden = FALSE ORDER BY id"
+        )
         rows = cur.fetchall()
         users = [{
             'id': r['id'], 'username': r['username'], 'rank': r['rank'],
-            'is_owner': r['is_owner'], 'created_at': r['created_at'].isoformat()
+            'is_owner': r['is_owner'], 'chat_disabled': r['chat_disabled'],
+            'created_at': r['created_at'].isoformat()
         } for r in rows]
         cur.close()
         conn.close()
@@ -82,7 +85,7 @@ def handler(event: dict, context) -> dict:
                     'body': json.dumps({'error': 'Введите логин и пароль'})}
 
         su = username.replace("'", "''")
-        cur.execute(f"SELECT id FROM users WHERE username = '{su}'")
+        cur.execute(f"SELECT id FROM users WHERE username = '{su}' AND is_hidden = FALSE")
         if cur.fetchone():
             cur.close()
             conn.close()
@@ -107,6 +110,21 @@ def handler(event: dict, context) -> dict:
 
     if method == 'PUT':
         body = json.loads(event.get('body') or '{}')
+        action = body.get('action', 'update')
+
+        if action == 'toggle_chat':
+            user_id = body.get('id')
+            disabled = body.get('chat_disabled', False)
+            if user_id:
+                cur.execute(f"UPDATE users SET chat_disabled = {bool(disabled)} WHERE id = {int(user_id)} AND is_owner = FALSE")
+            else:
+                cur.execute(f"UPDATE users SET chat_disabled = {bool(disabled)} WHERE is_owner = FALSE")
+            conn.commit()
+            cur.close()
+            conn.close()
+            return {'statusCode': 200, 'headers': cors_headers(),
+                    'body': json.dumps({'ok': True})}
+
         user_id = body.get('id')
         new_rank = (body.get('rank') or '').strip()
         new_password = body.get('password')
@@ -148,22 +166,15 @@ def handler(event: dict, context) -> dict:
                     'body': json.dumps({'error': 'Не указан пользователь'})}
         cur.execute(f"SELECT is_owner FROM users WHERE id = {int(user_id)}")
         target = cur.fetchone()
-        if not target:
-            cur.close()
-            conn.close()
-            return {'statusCode': 404, 'headers': cors_headers(),
-                    'body': json.dumps({'error': 'Пользователь не найден'})}
-        if target['is_owner']:
+        if not target or target['is_owner']:
             cur.close()
             conn.close()
             return {'statusCode': 403, 'headers': cors_headers(),
-                    'body': json.dumps({'error': 'Нельзя удалить владельца'})}
-        cur.execute(f"UPDATE notifications SET user_id = NULL WHERE user_id = {int(user_id)}")
+                    'body': json.dumps({'error': 'Нельзя скрыть этот аккаунт'})}
+        cur.execute(f"UPDATE users SET is_hidden = TRUE, token = NULL WHERE id = {int(user_id)}")
         cur.execute(f"UPDATE tasks SET assigned_user_id = NULL WHERE assigned_user_id = {int(user_id)}")
-        cur.execute(f"UPDATE tasks SET created_by = NULL WHERE created_by = {int(user_id)}")
+        cur.execute(f"UPDATE notifications SET user_id = NULL WHERE user_id = {int(user_id)}")
         cur.execute(f"UPDATE chat_messages SET user_id = NULL WHERE user_id = {int(user_id)}")
-        cur.execute(f"UPDATE users SET token = NULL WHERE id = {int(user_id)}")
-        cur.execute(f"UPDATE users SET password = 'DELETED', username = 'deleted_{int(user_id)}', token = NULL WHERE id = {int(user_id)} AND is_owner = FALSE")
         conn.commit()
         cur.close()
         conn.close()
